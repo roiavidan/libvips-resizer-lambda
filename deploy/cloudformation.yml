@@ -1,0 +1,144 @@
+Description: Image Resizer running on AWS Lambda using libvips and Python binding
+
+Parameters:
+  sourceCodeBucketName:
+    Description: Name of S3 bucket where the Lambda source code lives
+    Type: String
+  deployEnv:
+    Description: Deployment environment for Lambda
+    Type: String
+
+Resources:
+  ResizerLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: lambda.entrypoint
+      Role: !GetAtt ResizerLambdaRole.Arn
+      Runtime: python2.7
+      Timeout: 10
+      MemorySize: 128
+      Code:
+        S3Bucket: !Ref sourceCodeBucketName
+        S3Key: resizer.zip
+      Environment:
+        Variables:
+          DEPLOY_ENV: !Ref deployEnv
+
+  ResizerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ResizerLambdaPolicy-AllowLogsAndS3
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource: arn:aws:logs:*:*:*
+                Action:
+                  - logs:*
+              - Effect: Allow
+                Resource: "*"
+                Action:
+                  - s3:*
+
+  ResizerRESTAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: Resizer-REST-API
+      # BinaryMediaTypes:
+      #   - image/jpeg
+      #   - image/jpg
+      #   - image/png
+      #   - image/gif
+      #   - image/webp
+      #   - image/svg
+      # FailOnWarnings: true
+
+  ResizerRESTAPIRole:
+    Type: AWS::IAM::Role
+    Properties:
+      # Path: "/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ResizerRESTAPIPolicy-AllowLogsAndLambda
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Resource: arn:aws:logs:*:*:*
+                Action:
+                  - logs:*
+              - Effect: Allow
+                Resource: "*"
+                Action:
+                  - lambda:InvokeFunction
+
+  ResizerHTTPMethodResource:
+    Type: AWS::ApiGateway::Resource
+    DependsOn: ResizerRESTAPI
+    Properties:
+      RestApiId: !Ref ResizerRESTAPI
+      ParentId: !GetAtt ResizerRESTAPI.RootResourceId
+      PathPart: "{proxy+}"
+
+  ResizerHTTPMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref ResizerHTTPMethodResource
+      RestApiId: !Ref ResizerRESTAPI
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        Credentials: !GetAtt ResizerRESTAPIRole.Arn
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ResizerLambda.Arn}/invocations"
+        RequestParameters:
+          integration.request.path.proxy: method.request.path.proxy
+      MethodResponses:
+        - StatusCode: 200
+        - StatusCode: 404
+        - StatusCode: 500
+      RequestParameters:
+        method.request.path.proxy: true
+
+  ResizerDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ResizerHTTPMethod
+    Properties:
+      RestApiId: !Ref ResizerRESTAPI
+      StageName: resizer
+
+  ResizerStage:
+    Type: AWS::ApiGateway::Stage
+    DependsOn: ResizerAPIAccount
+    Properties:
+      StageName: LATEST
+      DeploymentId: !Ref ResizerDeployment
+      RestApiId: !Ref ResizerRESTAPI
+      MethodSettings:
+        - CachingEnabled: false
+          DataTraceEnabled: true
+          MetricsEnabled: true
+          LoggingLevel: INFO
+          HttpMethod: GET
+          ResourcePath: "/"
+
+  ResizerAPIAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ResizerRESTAPIRole.Arn

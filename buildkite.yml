@@ -1,0 +1,25 @@
+steps:
+  - name: ":python: Create package"
+    command: "bin/build"
+    agents:
+      queue: "non-prod-corp:default"
+
+  - wait
+
+  - name: ":jekyll: Deploy to Test"
+    command: "bin/deploy"
+    branches: "master"
+    env:
+      DEPLOY_ENV: test
+    agents:
+      queue: "non-prod-corp:default"
+
+  - block
+
+  - name: ":cake: Deploy to Production"
+    command: "bin/deploy"
+    branches: "master"
+    env:
+      DEPLOY_ENV: prod
+    agents:
+      queue: "prod-corp:deploy"

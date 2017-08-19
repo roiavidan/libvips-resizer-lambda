@@ -1,0 +1,72 @@
+#!/bin/bash
+
+source bin/cloudformation-functions
+
+STACK_NAME=resizer-lambda-stack1
+DEPLOY_ENV=${DEPLOY_ENV:-test}
+BUCKET_NAME=$(cat deploy/$DEPLOY_ENV.json | jq -r '.[] | select(.ParameterKey == "sourceCodeBucketName") | .ParameterValue')
+ZIP_FILE=$(ls /tmp/dist/*.zip)
+
+function call_cloudformation {
+  echo $($1 $STACK_NAME deploy/cloudformation.yml deploy/${DEPLOY_ENV}.json 2>&1)
+}
+
+function create_sourcecode_bucket {
+  echo -n "Creating sourcecode bucket ... "
+  RESULT=$(aws s3 mb s3://$BUCKET_NAME 2>&1)
+  if [ ! -z "$?" ]; then
+    if [ ! -z "$(echo $RESULT | grep BucketAlreadyOwnedByYou)" ]; then
+      echo "Bucket already exists. Skipping."
+    else
+      echo $RESULT
+      exit 1
+    fi
+  else
+    echo "Done."
+  fi
+}
+
+function upload_lambda {
+  echo -n "Uploading Lambda source code ... "
+  RESULT=$(aws s3 cp $ZIP_FILE s3://$BUCKET_NAME 2>&1)
+  if [ -z "$?" ]; then
+    echo $RESULT
+    exit 1
+  else
+    echo "Done."
+  fi
+}
+
+function deploy_stack {
+  echo -n "Deploying Resizer stack using CloudFormation ... "
+  RESULT=$(call_cloudformation "stack-create")
+  if [ ! -z "$(echo $RESULT | grep AlreadyExistsException)" ]; then
+    echo -n "Stack exists. Updating... "
+    RESULT=$(call_cloudformation "stack-update")
+    if [ ! -z "$(echo $RESULT | grep StackId)" ]; then
+      echo "Done. Stack progress:"
+      stack-tail $STACK_NAME
+    else
+      if [ ! -z "$(echo $RESULT | grep 'No updates')" ]; then
+        echo "Done (nothing to do!)"
+      elif [ ! -z "$(echo $RESULT | grep 'CREATE_FAILED')" ]; then
+        echo "Unable to update. Deleting. Stack progress:"
+        stack-delete $STACK_NAME
+      else
+        echo $RESULT
+        exit 1
+      fi
+    fi
+  else
+    if [ ! -z "$(echo $RESULT | grep 'An error occurred')" ]; then
+      echo $RESULT
+    else
+      echo "Done. Stack progress:"
+      stack-tail $STACK_NAME
+    fi
+  fi
+}
+
+create_sourcecode_bucket
+upload_lambda
+deploy_stack

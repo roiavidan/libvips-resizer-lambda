@@ -1,0 +1,10 @@
+[
+  {
+    "ParameterKey": "deployEnv",
+    "ParameterValue": "test"
+  },
+  {
+    "ParameterKey": "sourceCodeBucketName",
+    "ParameterValue": "libvips-resizer-lambda-sourcecode-bucket-test"
+  }
+]
