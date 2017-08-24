@@ -1,0 +1,3 @@
+#!/bin/bash
+
+docker-compose run ci python -m unittest discover -s tests/

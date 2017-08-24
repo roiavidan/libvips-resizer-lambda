@@ -4,6 +4,9 @@ Parameters:
   sourceCodeBucketName:
     Description: Name of S3 bucket where the Lambda source code lives
     Type: String
+  functionName:
+    Description: Name of the Lambda function
+    Type: String
   deployEnv:
     Description: Deployment environment for Lambda
     Type: String
@@ -12,6 +15,7 @@ Resources:
   ResizerLambda:
     Type: AWS::Lambda::Function
     Properties:
+      FunctionName: !Ref functionName
       Handler: lambda.entrypoint
       Role: !GetAtt ResizerLambdaRole.Arn
       Runtime: python2.7
@@ -23,6 +27,7 @@ Resources:
       Environment:
         Variables:
           DEPLOY_ENV: !Ref deployEnv
+          SOURCE_IMAGES_BUCKET: rea-dynimg-origin-prod-ap-southeast-2-roi
 
   ResizerLambdaRole:
     Type: AWS::IAM::Role
@@ -53,18 +58,16 @@ Resources:
     Properties:
       Name: Resizer-REST-API
       # BinaryMediaTypes:
-      #   - image/jpeg
-      #   - image/jpg
-      #   - image/png
-      #   - image/gif
-      #   - image/webp
-      #   - image/svg
-      # FailOnWarnings: true
+      #   - "image/jpeg"
+      #   - "image/jpg"
+      #   - "image/png"
+      #   - "image/gif"
+      #   - "image/webp"
+      #   - "image/svg"
 
   ResizerRESTAPIRole:
     Type: AWS::IAM::Role
     Properties:
-      # Path: "/"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -86,6 +89,11 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
 
+  ResizerAPIAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ResizerRESTAPIRole.Arn
+
   ResizerHTTPMethodResource:
     Type: AWS::ApiGateway::Resource
     DependsOn: ResizerRESTAPI
@@ -105,13 +113,15 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         PassthroughBehavior: WHEN_NO_MATCH
+        # IntegrationResponses:
+        #   - StatusCode: 200
+        #     # contentEncoding: CONVERT_TO_BINARY
         Credentials: !GetAtt ResizerRESTAPIRole.Arn
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ResizerLambda.Arn}/invocations"
-        RequestParameters:
-          integration.request.path.proxy: method.request.path.proxy
       MethodResponses:
         - StatusCode: 200
         - StatusCode: 404
+        - StatusCode: 400
         - StatusCode: 500
       RequestParameters:
         method.request.path.proxy: true
@@ -137,8 +147,3 @@ Resources:
           LoggingLevel: INFO
           HttpMethod: GET
           ResourcePath: "/"
-
-  ResizerAPIAccount:
-    Type: AWS::ApiGateway::Account
-    Properties:
-      CloudWatchRoleArn: !GetAtt ResizerRESTAPIRole.Arn

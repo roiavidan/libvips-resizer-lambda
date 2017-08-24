@@ -2,6 +2,6 @@
 
 rm -f dist/resizer.zip &> /dev/null
 docker-compose rm --force app &> /dev/null
-docker-compose run app zip -r9 /tmp/dist/resizer.zip . --exclude .bash\* --exclude bin/\* --exclude deploy/\*
+docker-compose run app zip -r9 /tmp/dist/resizer.zip . --exclude .bash\* bin/\* deploy/\*
 
 buildkite-agent artifact upload dist/resizer.zip && rm -f dist/resizer.zip

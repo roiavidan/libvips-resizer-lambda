@@ -4,7 +4,7 @@ steps:
     agents:
       queue: "non-prod-corp:default"
 
-  - wait
+  - block
 
   - name: ":jekyll: Deploy to Test"
     command: "bin/deploy"

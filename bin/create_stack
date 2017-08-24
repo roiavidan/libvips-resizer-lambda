@@ -5,6 +5,7 @@ source bin/cloudformation-functions
 STACK_NAME=resizer-lambda-stack1
 DEPLOY_ENV=${DEPLOY_ENV:-test}
 BUCKET_NAME=$(cat deploy/$DEPLOY_ENV.json | jq -r '.[] | select(.ParameterKey == "sourceCodeBucketName") | .ParameterValue')
+LAMBDA_NAME=$(cat deploy/$DEPLOY_ENV.json | jq -r '.[] | select(.ParameterKey == "functionName") | .ParameterValue')
 ZIP_FILE=$(ls /tmp/dist/*.zip)
 
 function call_cloudformation {
@@ -33,7 +34,18 @@ function upload_lambda {
     echo $RESULT
     exit 1
   else
-    echo "Done."
+    echo -n "Done. Triggering function update ... "
+    RESULT=$(aws lambda update-function-code --function-name $LAMBDA_NAME --zip-file fileb://$ZIP_FILE 2>&1)
+    if [ ! -z "$(echo $RESULT | grep 'Function not found')" ]; then
+      echo "Nothing to update. Function has just been created."
+    else
+      if [ ! -z "$(echo $RESULT | grep 'CodeSha256')" ]; then
+        echo "Done."
+      else
+        echo $RESULT
+        exit 1
+      fi
+    fi
   fi
 }
 

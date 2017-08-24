@@ -3,7 +3,7 @@
 FROM roiavidan/amazon-linux-lambda-base:2016.03 AS buildenv
 
 # Install devel dependencies
-RUN sudo yum install -y gcc-c++ gobject-introspection-devel libtiff-devel fftw-devel python27-devel libwebp-devel \
+RUN sudo yum install -y gcc-c++ gobject-introspection-devel libtiff-devel fftw-devel libwebp-devel \
                         libexif-devel libjpeg-turbo-devel libpng-devel expat-devel lcms2-devel giflib-devel
 
 # Install ORC which is not in Amazon repos
@@ -21,13 +21,12 @@ RUN curl -OLsk https://github.com/jcupitt/libvips/releases/download/v8.5.7/vips-
 
 # Build VipsCC
 RUN cd /usr/src/vips-8.5.7 && \
-    ./configure --prefix=/tmp && \
+    ./configure --without-python --prefix=/tmp && \
     make -j`nproc` install-strip
 
 # Deploy relevant binaries, libs and Python modules as build artifacts
 RUN cd /tmp && mkdir -p artifacts/lib && \
     cp lib/libvips{,CC}.so.42 artifacts/lib/ && \
-    cp -r lib64/python2.7/site-packages/vipsCC artifacts/ && rm -f artifacts/vipsCC/v*.{a,la} && \
     ldd artifacts/lib/libvips.so.42 | awk '{print $3}' | grep -E 'exif|fftw|jbig|tiff|webp|orc' | xargs -i cp {} artifacts/lib/ && \
     pip install -t /tmp/ cffi && \
     cp -r /tmp/_cffi_backend.so /tmp/cffi /tmp/pycparser /tmp/artifacts/ && cp /tmp/.libs_cffi_backend/* /tmp/artifacts/lib/ && \
@@ -42,8 +41,8 @@ RUN cd /tmp && mkdir -p artifacts/lib && \
 # EC2 AMI used by Lambda ("close enough": http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html)
 FROM roiavidan/amazon-linux-lambda-base:2016.03
 
-# Install Python debugger
-RUN sudo pip install pudb
+# Install Python debugger & Unittest Mock library
+RUN sudo pip install pudb mock
 
 # Copy Vips artifacts from build environment
 COPY --from=buildenv /tmp/artifacts/ /home/ec2-user

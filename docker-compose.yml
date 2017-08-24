@@ -9,10 +9,16 @@ app:
     - ./deploy:/home/ec2-user/deploy
   environment:
     - DEPLOY_ENV
-    - AWS_ACCESS_KEY_ID=AKIAJWMDCQHUDSYCXDOA
-    - AWS_SECRET_ACCESS_KEY=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
-    - AWS_DEFAULT_REGION=ap-southeast-2
-    # - AWS_ACCESS_KEY_ID
-    # - AWS_SECRET_ACCESS_KEY
-    # - AWS_SESSION_TOKEN
-    # - BUILDKITE_BUILD_NUMBER
+    - SOURCE_IMAGES_BUCKET
+    - AWS_DEFAULT_REGION
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
+    - AWS_SESSION_TOKEN
+    - BUILDKITE_BUILD_NUMBER
+
+ci:
+  extends:
+    file: docker-compose.yml
+    service: app
+  volumes:
+    - ./tests:/home/ec2-user/tests

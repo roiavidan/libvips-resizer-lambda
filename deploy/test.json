@@ -4,6 +4,10 @@
     "ParameterValue": "test"
   },
   {
+    "ParameterKey": "functionName",
+    "ParameterValue": "libvips-resizer-lambda-v1"
+  },
+  {
     "ParameterKey": "sourceCodeBucketName",
     "ParameterValue": "libvips-resizer-lambda-sourcecode-bucket-test"
   }
